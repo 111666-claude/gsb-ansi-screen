@@ -27,19 +27,32 @@ func New(w, h int) *Screen {
 }
 
 func (s *Screen) put(ch rune, c *Counter) {
-	target := s.row*s.w + s.col
-	idx := -1
-	for i := range s.flat {
-		c.Scanned++
-		if i == target {
-			idx = i
-			break
-		}
-	}
-	if idx >= 0 {
-		s.flat[idx] = ch
-	}
+	s.clamp()
+	s.flat[s.row*s.w+s.col] = ch
+	c.Scanned++
 	s.col++
+}
+
+func (s *Screen) clamp() {
+	if s.row < 0 {
+		s.row = 0
+	}
+	if s.row >= s.h {
+		s.row = s.h - 1
+	}
+	if s.col < 0 {
+		s.col = 0
+	}
+	if s.col >= s.w {
+		s.col = s.w - 1
+	}
+}
+
+func (s *Screen) clear() {
+	for i := range s.flat {
+		s.flat[i] = ' '
+	}
+	s.row, s.col = 0, 0
 }
 
 func params(raw string) []int {
@@ -64,13 +77,32 @@ func (s *Screen) Feed(data string, c *Counter) {
 	for i < len(data) {
 		if data[i] == 0x1b && i+1 < len(data) && data[i+1] == '[' {
 			j := i + 2
-			for j < len(data) && (data[j] == ';' || (data[j] >= '0' && data[j] <= '9')) {
-				j++
-			}
-			_ = params(data[i+2 : j])
-			i = j + 1
-			continue
+		for j < len(data) && (data[j] == ';' || (data[j] >= '0' && data[j] <= '9')) {
+			j++
 		}
+		if j >= len(data) {
+			break
+		}
+		ps := params(data[i+2 : j])
+		switch data[j] {
+		case 'H', 'f':
+			row, col := 1, 1
+			if len(ps) > 0 && ps[0] > 0 {
+				row = ps[0]
+			}
+			if len(ps) > 1 && ps[1] > 0 {
+				col = ps[1]
+			}
+			s.row, s.col = row-1, col-1
+			s.clamp()
+		case 'J':
+			if len(ps) > 0 && ps[0] == 2 {
+				s.clear()
+			}
+		}
+		i = j + 1
+		continue
+	}
 		s.put(rune(data[i]), c)
 		i++
 	}
