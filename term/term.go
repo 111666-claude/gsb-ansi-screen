@@ -27,19 +27,25 @@ func New(w, h int) *Screen {
 }
 
 func (s *Screen) put(ch rune, c *Counter) {
-	target := s.row*s.w + s.col
-	idx := -1
-	for i := range s.flat {
-		c.Scanned++
-		if i == target {
-			idx = i
-			break
-		}
-	}
-	if idx >= 0 {
-		s.flat[idx] = ch
-	}
+	s.flat[s.row*s.w+s.col] = ch
+	c.Scanned++
 	s.col++
+	if s.col >= s.w {
+		s.col = s.w - 1
+	}
+}
+
+func (s *Screen) moveTo(row, col int) {
+	s.row = min(max(row-1, 0), s.h-1)
+	s.col = min(max(col-1, 0), s.w-1)
+}
+
+func (s *Screen) clear() {
+	for i := range s.flat {
+		s.flat[i] = ' '
+	}
+	s.row = 0
+	s.col = 0
 }
 
 func params(raw string) []int {
@@ -67,7 +73,25 @@ func (s *Screen) Feed(data string, c *Counter) {
 			for j < len(data) && (data[j] == ';' || (data[j] >= '0' && data[j] <= '9')) {
 				j++
 			}
-			_ = params(data[i+2 : j])
+			if j >= len(data) {
+				break
+			}
+			p := params(data[i+2 : j])
+			switch data[j] {
+			case 'H', 'f':
+				row, col := 1, 1
+				if len(p) > 0 {
+					row = p[0]
+				}
+				if len(p) > 1 {
+					col = p[1]
+				}
+				s.moveTo(row, col)
+			case 'J':
+				if len(p) > 0 && p[0] == 2 {
+					s.clear()
+				}
+			}
 			i = j + 1
 			continue
 		}
